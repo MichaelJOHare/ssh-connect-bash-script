@@ -17,7 +17,7 @@ vmsmenu() {
     return 1
   fi
 
-  # organize hosts into "favorited" hosts and named groups (group.HOST)s
+  # organize hosts into "favorited" hosts and named groups (group.HOST)
   local main_hosts=()
   local -A group_hosts_map=()
   local -a group_names=()
