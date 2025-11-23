@@ -1,6 +1,4 @@
 #!/bin/bash
-
-# TEST NEED FOR CONVULUTED PROFILE LAUNCH IN WINDOWS TERMINAL AFTER ~/.BASH_PROFILE CHANGE
 GROUP_DELIMITER='.'
 if ! declare -F vmsmenu >/dev/null; then
 vmsmenu() {
@@ -17,7 +15,7 @@ vmsmenu() {
     return 1
   fi
 
-  # organize hosts into "favorited" hosts and named groups (group.HOST)
+  # organize hosts into main (aka favorited) hosts and named groups (group.HOST)
   local main_hosts=()
   local -A group_hosts_map=()
   local -a group_names=()
@@ -89,7 +87,7 @@ vmsmenu() {
 
     # get main menu selection
     local selection
-    printf '\n'
+    printf '\n'                  # implement preventing arrow keys from moving cursor
     read -r -p "Enter number (or E to exit): " selection
     if [[ "$selection" =~ ^[Ee]$ ]]; then
       clear
@@ -209,7 +207,7 @@ _ssh_connect() {
   stty onlcr
   printf '\033]0;%s@%s\007' "$user" "$host"
   if ! ssh "${user}@${host}"; then     # set ConnectTimeout, add visual for long waits?
-    printf '\033]0;%s\007' "VMS MENU"  # make these PWD instead?
+    printf '\033]0;%s\007' "VMS MENU"
     sleep 5
     return 1
   fi
@@ -222,8 +220,7 @@ _clear_prev_input() {
 }
 fi
 
-# only needed if we keep it so that windows terminal auto launches vmsmenu
-#   since vmsmenu exits early when ssh config is missing, maybe implement this into vmsmenu
+# since vmsmenu exits early when ssh config is missing, maybe implement this into vmsmenu (same with next function)
 _ensure_ssh_config() {
   # ensure ssh config file exists, create one if not
   local ssh_config="$1"
@@ -449,12 +446,14 @@ addhost() {
         if [[ "$edit_choice" =~ ^[Nn]$ ]]; then
           continue
         fi
+        # extract group name if user prefixed nickname with group
         if [[ "$host_alias" == *"$GROUP_DELIMITER"* ]]; then
           group_name="${host_alias%%"$GROUP_DELIMITER"*}"
         else
           group_name=""
         fi
       else
+        # get group name for new host if any
         local belongs_group="n"
         read -r -p "Is this host part of a group? (y/N): " belongs_group
         if [[ "$belongs_group" =~ ^[Yy]$ ]]; then
@@ -467,23 +466,27 @@ addhost() {
             continue
           fi
         fi
+        # construct group.NICKNAME
         host_alias="$nickname"
         if [[ -n "$group_name" ]]; then
           host_alias="${group_name}${GROUP_DELIMITER}${nickname}"
         fi
       fi
 
+      # initialize host values
       local hostname=""
       local port="22"
       local hostkey=""
       local kex=""
       local macs=""
 
+      # if editing existing host, read current values and assign to variables
       if _host_entry_exists "$host_alias" "$ssh_config"; then
         IFS='|' read -r hostname port hostkey kex macs <<< "$( _read_host_values "$host_alias" "$ssh_config" )"
         [[ -z "$port" ]] && port="22"
       fi
 
+      # get host details from user
       read -r -p "Enter hostname or IP${hostname:+ [$hostname]} (or E to cancel): " hostname_input
       if [[ "$hostname_input" =~ ^[Ee]$ ]]; then
         continue
@@ -497,6 +500,7 @@ addhost() {
         continue
       fi
 
+      # get port from user, default 22
       read -r -p "Enter port [${port:-22}]: " port_input
       if [[ "$port_input" =~ ^[Ee]$ ]]; then
         continue
@@ -508,6 +512,7 @@ addhost() {
         port="22"
       fi
 
+      # create associative array to hold algorithm flags
       local -a algo_flags=()
       [[ -n "$hostkey" ]] && algo_flags+=("H")
       [[ -n "$kex" ]] && algo_flags+=("K")
