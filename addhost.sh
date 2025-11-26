@@ -1,15 +1,26 @@
 #!/bin/bash
 # add ssh sessions to ~/.ssh/config
 
-# add ability to list hosts and remove them
-GROUP_DELIMITER='.'
+# TODO: add ability to list hosts and remove them
+#       maybe first menu option should ask user to choose between adding, listing, editing, or removing hosts
+#          - let user select host from list to edit/remove
+#       add ? to algorithm selection to show what each letter means (maybe other help options too)
+#       when editing existing host, allow changing nickname and group
+
+# load ssh config helpers
+source "$HOME/.local/lib/ssh_config_utils.sh"
+
 if ! declare -F addhost >/dev/null; then
 addhost() {
-  # set stty to default aka ON (it is unset in bashrc so that ssh can inherits it being off)
-  stty onlcr
-  # find ssh config
+  # set stty to default aka ON (it is unset in bashrc so that ssh/telnet can inherit it being off)
+  #stty onlcr
+
+  # find ssh config file or create if missing
   local ssh_config="$HOME/.ssh/config"
-  _ensure_ssh_config "$ssh_config" || { printf 'Unable to access %s\n' "$ssh_config" >&2; return 1; }
+  _ensure_ssh_config "$ssh_config" || { 
+    printf 'Unable to access %s\n' "$ssh_config" >&2; 
+    return 1; 
+  }
 
   # store error messages
   local last_msg=""
@@ -24,7 +35,7 @@ addhost() {
     mapfile -t existing_groups < <(_list_config_groups "$ssh_config")
     if [ "${#existing_groups[@]}" -gt 0 ]; then
       printf 'Existing groups: \033[38;5;208m%s\033[0m\n\n' "$(IFS=', '; echo "${existing_groups[*]^^}")"
-    fi
+    fi  # maybe list existing hosts with multiple entries too?
 
     # display last error message if any
     if [ -n "$last_msg" ]; then
@@ -33,7 +44,7 @@ addhost() {
     fi
 
     # get nickname for new host
-    printf "Enter unique \033[0;32mnickname\033[0m for the host (or \033[0;31mE\033[0m"
+    printf "Enter unique \033[0;32mnickname\033[0m for the host (or \033[0;31mE\033[0m" # should maybe disallow * in nickname (or any special chars)
     read -r -p " to exit): " host
     if [[ "$host" =~ ^[Ee]$ ]]; then
       clear
@@ -58,15 +69,15 @@ addhost() {
     local host_alias=""
     local group_name=""
 
-    # deal with editing host that appears more than once already in ssh config
+    # deal with editing host (that has MORE than 1 entry already)
     if [ "${#matching_aliases[@]}" -gt 0 ]; then
       if [ "${#matching_aliases[@]}" -gt 1 ]; then
         printf '\nNickname \033[0;32m%s\033[0m exists in multiple host entries:\n' "$nickname"
         for idx in "${!matching_aliases[@]}"; do
-          printf '  %d) \033[0;32m%s\033[0m\n' $((idx+1)) "${matching_aliases[idx]}" # find better way to differentiate (hostname?)
-        done
+          printf '  %d) \033[0;32m%s\033[0m\n' $((idx+1)) "${matching_aliases[idx]}" # find better way to differentiate (hostname or diff?)
+        done                                                                         #  - should show details of one and diff the others
 
-        # get nickname to edit
+        # get nickname of host (that has more than 1 entry) to edit
         local alias_choice=""
         while true; do
           printf 'Select entry to edit %s or \033[0;31mE\033[0m' "(1-${#matching_aliases[@]})"
@@ -90,25 +101,26 @@ addhost() {
         host_alias="${matching_aliases[0]}"
       fi
 
-      # deal with editing host that appears once already in ssh config
-      printf '\nHost \033[0;32m%s\033[0m already exists.\n' "$host_alias"
+      # deal with editing host (that has ONLY 1 entry already)
+      printf '\nHost \033[0;32m%s\033[0m already exists.\n' "$host_alias"  # if part of group, should strip delimiter and make group upcase and orange
       read -r -p "Edit this host? (Y/n): " edit_choice
       if [[ "$edit_choice" =~ ^[Nn]$ ]]; then
-        last_msg="Use a different nickname or confirm edit."   # should we even be forcing unique nicknames?
+        last_msg="Use a different nickname or confirm edit."   # should we even be forcing unique nicknames? I don't think so, just make them into "groups"
         continue
       fi
       if [[ "$host_alias" == *"$GROUP_DELIMITER"* ]]; then
         group_name="${host_alias%%"$GROUP_DELIMITER"*}"
       fi
     else
-      local belongs_group="n"    # add E to exit option
-      read -r -p "Is this host part of a group? (y/N): " belongs_group
+      local belongs_group="n"    # add E to cancel option
+      printf "Is this host part of a \033[38;5;208mgroup\033[0m?"
+      read -r -p " (y/N): " belongs_group
       if [[ "$belongs_group" =~ ^[Yy]$ ]]; then
         read -r -p "Enter group name (letters/numbers): " group_name
         group_name="${group_name//[[:space:]]/}"
         group_name="${group_name,,}"
         if [[ -z "$group_name" || ! "$group_name" =~ ^[a-z0-9]+$ ]]; then
-          last_msg="Group names must be letters/numbers."
+          last_msg="Group names must be letters/numbers." # make this prompt for group again?
           continue
         fi
       else
@@ -136,8 +148,9 @@ addhost() {
     # get host values from user
     printf 'Enter hostname or IP'
     if [ -n "$hostname" ]; then
-      printf ' [\033[0;32m%s\033[0m] (or \033[0;31mE\033[0m' "$hostname"
+      printf ' [\033[0;32m%s\033[0m]' "$hostname"
     fi
+    printf ' (or \033[0;31mE\033[0m'
     read -r -p " to cancel): " hostname_input
     if [[ "$hostname_input" =~ ^[Ee]$ ]]; then
       last_msg="Hostname entry cancelled."
@@ -152,8 +165,8 @@ addhost() {
     fi
 
     # get port from user
-    printf 'Enter port [\033[0;32m%s\033[0m]: ' "${port:-22}"
-    read -r -p " (or E to cancel): " port_input
+    printf 'Enter port [\033[0;32m%s\033[0m] (or \033[0;31mE\033[0m' "${port:-22}"
+    read -r -p " to cancel): " port_input
     if [[ "$port_input" =~ ^[Ee]$ ]]; then
       last_msg="Port entry cancelled."
       continue
@@ -176,7 +189,7 @@ addhost() {
     fi
 
     # get algorithms to configure from user
-    local algo_choice=""                        # make this nicer
+    local algo_choice=""                        # make this nicer and allow E to cancel
     printf 'Configure algorithms (H,K,M e.g. HK) (current: '
     printf '\033[0;32m%s\033[0m' "$algo_current_value"
     printf ')'

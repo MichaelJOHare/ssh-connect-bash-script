@@ -1,13 +1,15 @@
 #!/bin/bash
 # shared SSH config helpers for vmsmenu/addhost
 
-GROUP_DELIMITER='.'
+# define group delimiter constant globally (group.HOST)
+: "${GROUP_DELIMITER:=.}"
+readonly GROUP_DELIMITER
+
 _clear_prev_input() {
   printf '\033[1A\033[2K'
 }
 
 _ensure_ssh_config() {
-  # ensure ssh config file exists, create one if not
   local ssh_config="$1"
   local ssh_dir
   ssh_dir="$(dirname "$ssh_config")"
@@ -15,15 +17,23 @@ _ensure_ssh_config() {
   touch "$ssh_config" || return 1
 }
 
+_ensure_telnet_config() {
+  local telnet_config="$1"
+  local telnet_dir
+  telnet_dir="$(dirname "$telnet_config")"
+  mkdir -p "$telnet_dir" || return 1
+  touch "$telnet_config" || return 1
+}
+
 _host_entry_exists() {
   local alias="$1"
-  local ssh_config="$2"
-  grep -Eq "^Host[[:space:]]+$alias$" "$ssh_config"
+  local config_file="$2"
+  grep -Eq "^Host[[:space:]]+$alias$" "$config_file"
 }
 
 _read_host_values() {
   local alias="$1"
-  local ssh_config="$2"
+  local config_file="$2"
   local line current in_block hostname port hostkey kex macs
   while IFS= read -r line; do
     if [[ "$line" =~ ^Host[[:space:]]+(.+)$ ]]; then
@@ -47,13 +57,13 @@ _read_host_values() {
         esac
       fi
     fi
-  done < "$ssh_config"
+  done < "$config_file"
   printf '%s|%s|%s|%s|%s\n' "${hostname:-}" "${port:-}" "${hostkey:-}" "${kex:-}" "${macs:-}"
 }
 
 _remove_host_entry() {
   local alias="$1"
-  local ssh_config="$2"
+  local config_file="$2"
   local tmp_file
   tmp_file="$(mktemp)" || return 1
   awk -v target="$alias" '
@@ -65,14 +75,14 @@ _remove_host_entry() {
     }
     skip { next }
     { print }
-  ' "$ssh_config" > "$tmp_file" && mv "$tmp_file" "$ssh_config"
+  ' "$config_file" > "$tmp_file" && mv "$tmp_file" "$config_file"
 }
 
 _append_host_entry() {
   local alias="$1"
   local hostname="$2"
   local port="$3"
-  local ssh_config="$4"
+  local config_file="$4"
   local hostkey="$5"
   local kex="$6"
   local macs="$7"
@@ -89,11 +99,11 @@ _append_host_entry() {
     if [[ -n "$macs" ]]; then
       printf '    MACs %s\n' "$macs"
     fi
-  } >> "$ssh_config"
+  } >> "$config_file"
 }
 
 _list_config_groups() {
-  local ssh_config="$1"
+  local config_file="$1"
   awk -v d="$GROUP_DELIMITER" '
     /^Host[[:space:]]+/ {
       for (i=2; i<=NF; i++) {
@@ -111,12 +121,12 @@ _list_config_groups() {
     END {
       for (g in groups) { print g }
     }
-  ' "$ssh_config" 2>/dev/null | sort
+  ' "$config_file" 2>/dev/null | sort
 }
 
 _find_aliases_for_nickname() {
   local nickname="$1"
-  local ssh_config="$2"
+  local config_file="$2"
   local upper_nick="${nickname^^}"
   awk -v nick="$upper_nick" -v d="$GROUP_DELIMITER" '
     /^Host[[:space:]]+/ {
@@ -136,5 +146,5 @@ _find_aliases_for_nickname() {
         }
       }
     }
-  ' "$ssh_config"
+  ' "$config_file"
 }
