@@ -1,21 +1,10 @@
 #!/bin/bash
-# interactive SSH launcher based on ~/.ssh/config entries
+# interactive SSH/telnet launcher based on ~/.ssh/config and ~/.telnet/config entries
 
-# TODO: add telnet support using ~/.telnet/config
-#       maybe first menu option should ask user to choose between ssh and telnet? (default ssh)
+# TODO: allow switching transport mode (ssh/telnet) from within the menu
 #       separate out the function of main (favorited) hosts and grouped hosts
 #         - add ability to favorite hosts (e.g., via a separate favorites file?)
 # low prio - clean up use of single vs double quotes in printf statements
-
-# load ssh config helpers
-source "$HOME/.local/lib/ssh_config_utils.sh"
-
-# ANSI escape color constants
-readonly CLR_GREEN=$'\033[0;32m'
-readonly CLR_RED=$'\033[0;31m'
-readonly CLR_MAGENTA=$'\033[0;35m'
-readonly CLR_ORANGE=$'\033[38;5;208m'
-readonly CLR_RESET=$'\033[0m'
 
 #
 #           ***HELPER FUNCTIONS***
@@ -37,9 +26,9 @@ _render_menu() {
 
   # display menu title and subtitle
   clear
-  printf '\n%s\n\n\r' "$format_title"
+  printf '\n%s\n\n' "$format_title"
   if [[ -n "$subtitle" ]]; then
-    printf '%s\n\n\r' "$subtitle"
+    printf '%s\n\n' "$subtitle"
   fi
 
   # if type is group, color orange; if host, color green
@@ -49,15 +38,15 @@ _render_menu() {
       entry_type="${types_ref[idx]}"
     fi
     if [[ "$entry_type" == "group" ]]; then
-      printf "%d) %s%s CLUSTER%s\n\r" $((idx+1)) "$CLR_ORANGE" "${labels_ref[idx]}" "$CLR_RESET"
+      printf "%d) %s \n" $((idx+1)) "${CLR_ORANGE}${labels_ref[idx]} CLUSTER${CLR_RESET}"
     else
-      printf "%d) %s%s%s\n\r" $((idx+1)) "$CLR_GREEN" "${labels_ref[idx]}" "$CLR_RESET"
+      printf "%d) %s\n" $((idx+1)) "${CLR_GREEN}${labels_ref[idx]}${CLR_RESET}"
     fi
   done
 
   # display message if any
   if [[ -n "$message" ]]; then
-    printf '\n%s%s%s\n\r' "$CLR_RED" "$message" "$CLR_RESET"
+    printf '\n%s\n' "${CLR_RED}$message${CLR_RESET}"
   fi
 }
 
@@ -87,6 +76,37 @@ _prompt_selection() {
   printf 'INVALID'
 }
 
+_select_transport() {
+  local -n _transport_out="$1"
+  local selection
+  while true; do
+    clear
+    printf '\n%s\n\n' "------------TRANSPORT MODE------------"
+    printf '1) %s (default)\n' "${CLR_GREEN}SSH${CLR_RESET}"
+    printf '2) %s\n\n' "${CLR_YELLOW}Telnet${CLR_RESET}"
+    printf '%s' "Enter number (or ${CLR_RED}E${CLR_RESET} to exit) [${CLR_GREEN}1${CLR_RESET}]: "
+    read -r selection
+    case "$selection" in
+      ''|1)
+        _transport_out='ssh'
+        return 0
+        ;;
+      2)
+        _transport_out='telnet'
+        return 0
+        ;;
+      [Ee])
+        return 1
+        ;;
+      *)
+        _clear_prev_input
+        printf '%s\n' "${CLR_RED}Invalid selection.${CLR_RESET}"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
 #
 #           *** MENU FUNCTION ***
 #
@@ -95,24 +115,38 @@ vmsmenu() {
   # store error messages
   local last_msg=""
 
-  # find ssh config
-  local ssh_config="$HOME/.ssh/config"
-  _ensure_ssh_config "$ssh_config" || {
-    printf 'Unable to access %s\n' "$ssh_config" >&2
+  # choose transport, ssh (default) or telnet
+  local transport_key=""
+  if ! _select_transport transport_key; then
+    clear
+    return 0
+  fi
+
+  # prepare config file and connect function based on transport choice
+  local config_file connect_fn transport_label
+  case "$transport_key" in
+    telnet)
+      transport_label="Telnet"
+      config_file="$HOME/.telnet/config"
+      connect_fn="_telnet_connect"
+      ;;
+    *)
+      transport_label="SSH"
+      config_file="$HOME/.ssh/config"
+      connect_fn="_ssh_connect"
+      ;;
+  esac
+
+  # ensure config file exists, or create if missing
+  if ! _ensure_config_file "$config_file"; then
+    printf 'Unable to access %s config file: %s\n' "$transport_label" "$config_file" >&2
     return 1
-  }
+  fi
 
-  # find telnet config
-  local telnet_config="$HOME/.telnet/config"
-  _ensure_telnet_config "$telnet_config" || { 
-    printf 'Telnet config not found: %s\n' "$telnet_config" >&2; 
-    return 1; 
-  }
-
-  # gather all ssh hosts
-  mapfile -t hosts < <(awk '/^Host[[:space:]]+/ { for (i=2; i<=NF; i++) print $i }' "$ssh_config")
+  # load host aliases from config file
+  mapfile -t hosts < <(_load_host_aliases "$config_file")
   if [ ${#hosts[@]} -eq 0 ]; then
-    printf 'No hosts found in %s\n' "$ssh_config" >&2
+    printf 'No hosts found in %s\n' "$config_file" >&2
     return 1
   fi
 
@@ -129,10 +163,11 @@ vmsmenu() {
       group_entry="${h%%"$GROUP_DELIMITER"*}"
       host_entry="${h#*"$GROUP_DELIMITER"}"
       if [[ -n "$group_entry" && -n "$host_entry" && "$group_entry" =~ ^[a-z0-9]+$ ]]; then
+        # first time a group is seen initialize its entry, when same group seen again append host
         if [[ -z "${group_hosts_map[$group_entry]}" ]]; then
           group_hosts_map[$group_entry]="$h"
         else
-          group_hosts_map[$group_entry]+=$'\n'"$h"
+          group_hosts_map[$group_entry]+=$'\n'$h
         fi
         continue
       fi
@@ -168,7 +203,7 @@ vmsmenu() {
   done
 
   # set main menu title and subtitle
-  local main_title="VMS"
+  local main_title="VMS ${transport_label^^}"
   local main_subtitle="Select a ${CLR_GREEN}host${CLR_RESET} to connect to "
   main_subtitle+="or a ${CLR_ORANGE}group${CLR_RESET} to open its menu:"
 
@@ -186,7 +221,6 @@ vmsmenu() {
     case "$selection" in
       EXIT)
         clear
-        #stty onlcr
         return 0
         ;;
       INVALID)
@@ -202,18 +236,17 @@ vmsmenu() {
     local sel_value="${values[sel_index]}"
     if [ "$sel_type" = "host" ]; then
       last_msg=""
-      local ssh_result
-      _ssh_connect "$sel_value"
-      ssh_result=$?
-      if [ $ssh_result -eq 0 ]; then
+      local connect_result
+      "$connect_fn" "$sel_value" "$config_file"
+      connect_result=$?
+      if [ $connect_result -eq 0 ]; then
         return 0
-      elif [ $ssh_result -eq 2 ]; then
+      elif [ "$transport_key" = "ssh" ] && [ $connect_result -eq 2 ]; then
         last_msg="Error: username required"
-        continue
       else
-        last_msg="SSH failed to connect to ${sel_value} — returned to main menu"
-        continue
+        last_msg="Connection to $sel_value failed — returned to main menu"
       fi
+      continue
     fi
 
     #
@@ -231,7 +264,7 @@ vmsmenu() {
       continue
     fi
 
-    # prepare group host labels and values
+    # prepare host labels and values for group menu
     local group_labels=()
     local group_values=()
     for host_item in "${group_entries[@]}"; do
@@ -263,7 +296,6 @@ vmsmenu() {
       case "$selection2" in
         EXIT)
           clear
-          #stty onlcr
           return 0
           ;;
         BACK)
@@ -280,18 +312,17 @@ vmsmenu() {
       local host_index=$((selection2-1))
       local chosen_host="${group_values[host_index]}"
       last_msg=""
-      local ssh_result
-      _ssh_connect "$chosen_host"
-      ssh_result=$?
-      if [ $ssh_result -eq 0 ]; then
+      local connect_result
+      "$connect_fn" "$chosen_host" "$config_file"
+      connect_result=$?
+      if [ $connect_result -eq 0 ]; then
         return 0
-      elif [ $ssh_result -eq 2 ]; then
+      elif [ "$transport_key" = "ssh" ] && [ $connect_result -eq 2 ]; then
         last_msg="Error: username required"
-        continue
       else
-        last_msg="SSH failed to connect to ${chosen_host} — returning to cluster menu"
-        continue
+        last_msg="Connection to $chosen_host failed — returning to cluster menu"
       fi
+      continue
     done
   done
 }
@@ -299,19 +330,46 @@ vmsmenu() {
 _ssh_connect() {
   local host="$1"
   local user
-  printf '\r%slogin%s' "$CLR_MAGENTA" "$CLR_RESET"
-  read -r -p " as: " user
+  printf '%s as: ' "${CLR_MAGENTA}login${CLR_RESET}"
+  read -r user
   if [[ -z "$user" ]]; then
     return 2
   fi
   clear
-  printf 'Connecting to %s%s%s as %s%s%s...\n\r' "$CLR_GREEN" "$host" "$CLR_RESET" "$CLR_MAGENTA" "$user" "$CLR_RESET"
-  # set stty onlcr so it is back to default after logging out of ssh (it is unset in bashrc)
-  # interestingly, this does not apply to the ssh session itself
-  #stty onlcr     ...wtf this doesn't seem to do anything anymore?
-  printf '\033]0;%s@%s\007' "$user" "$host"
+  printf 'Connecting to %s as %s...\n' "${CLR_GREEN}$host${CLR_RESET}" "${CLR_MAGENTA}$user${CLR_RESET}"
+  printf '\033]0;%s\007' "$user@$host"
   if ! ssh "${user}@${host}"; then       # set ConnectTimeout, add visual for long waits?
+    printf '\033]0;%s\007' "VMS MENU"    # if ssh fails, prompt to try telnet?
+    printf 'SSH connection to %s failed. Returning to menu in 5 seconds...\n' "${CLR_GREEN}$host${CLR_RESET}"
+    sleep 5
+    return 1
+  fi
+  printf '\033]0;%s\007' "VMS MENU"
+  return 0
+}
+
+_telnet_connect() {
+  local host="$1"
+  local config_file="$2"
+  local entry hostname port
+
+  # get hostname/port since telnet needs them directly
+  entry="$(_read_host_values "$host" "$config_file")"
+  IFS='|' read -r hostname port _ <<< "$entry"
+  printf '%s' "host: $host, entry: $entry, hostname: $hostname, port: $port"  # DEBUG
+
+  if [[ -z "$hostname" ]]; then
+    printf '%s\n' "${CLR_RED}No telnet hostname/IP configured for ${host}${CLR_RESET}"
+    sleep 5
+    return 1
+  fi
+
+  clear
+  printf 'Connecting to %s via telnet...\n' "${CLR_GREEN}$hostname${CLR_RESET}"
+  printf '\033]0;%s\007' "telnet:$host"
+  if ! telnet "$hostname" "${port:-23}"; then
     printf '\033]0;%s\007' "VMS MENU"
+    printf 'Telnet connection to %s failed. Returning to menu in 5 seconds...\n' "${CLR_GREEN}$host${CLR_RESET}"
     sleep 5
     return 1
   fi

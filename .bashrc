@@ -1,20 +1,8 @@
 eval "$(fnm env --use-on-cd --shell bash)"
 bind 'set bell-style none'  # causes flickering
 
+# use msys2 telnet since windows one doesn't like OpenVMS
 alias telnet='/c/msys64/usr/bin/telnet.exe'
-
-# vvv this doesn't seem to do anything anymore...? so confused why EVE was broken before but now works fine
-#        - i think it was actually fixed by sourcing bashrc in bash_profile?
-
-#     maybe put this in a different bashrc file and use --rcfile option in profile commandline
-#     avoids having to hardcode guid here 
-#       - but then wouldn't be able to do vmsmenu in normal bash shell
-#           - could maybe alias vmsmenu?
-#
-# fix CR/LF for OpenVMS only when a real TTY is present and running under VMSMENU profile
-#if tty -s && [[ "${WT_PROFILE_ID:-}" == "{69e78f2b-2416-4c8d-bd47-ca33acbbfc29}" ]]; then
-    #stty -onlcr
-#fi
 
 # load functions
 if [[ $- == *i* ]]; then
