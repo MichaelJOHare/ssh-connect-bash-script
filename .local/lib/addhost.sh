@@ -3,13 +3,16 @@
 
 # TODO: add telnet support using ~/.telnet/config
 #       add ability to list hosts and remove them
-#       maybe first menu option should ask user to choose between adding, listing, editing, or removing hosts
-#          - let user select host from list to edit/remove
-#       add ? to algorithm selection to show what each letter means (maybe other help options too)
+#       maybe first menu option should ask user listing hosts or create new host
+#          - let user select host from list to edit/remove/view details
 #       when editing existing host, allow changing nickname and group
+#   low prio - cleanup host vs hostalias vs nickname terminology
 
 if ! declare -F addhost >/dev/null; then
 addhost() {
+  # store error messages
+  local last_msg=""
+
   # find ssh config file or create if missing
   local ssh_config="$HOME/.ssh/config"
   _ensure_config_file "$ssh_config" || {
@@ -24,9 +27,6 @@ addhost() {
     return 1; 
   }
 
-  # store error messages
-  local last_msg=""
-
   # main menu loop
   while true; do
     clear
@@ -37,7 +37,7 @@ addhost() {
     mapfile -t existing_groups < <(_list_config_groups "$ssh_config")
     if [ "${#existing_groups[@]}" -gt 0 ]; then
       printf 'Existing groups: %s\n\n' "$(IFS=', '; echo "${CLR_ORANGE}${existing_groups[*]^^}${CLR_RESET}")"
-    fi  # maybe list existing hosts with multiple entries too?
+    fi
 
     # display last error message if any
     if [ -n "$last_msg" ]; then
@@ -46,17 +46,17 @@ addhost() {
     fi
 
     # get nickname for new host
-    printf 'Enter unique %s for the host (or %s to exit): ' "${CLR_GREEN}nickname${CLR_RESET}" "${CLR_RED}E${CLR_RESET}" # should maybe disallow * in nickname (or any special chars)
+    printf 'Enter unique %s for the host (or %s to exit): ' "${CLR_GREEN}nickname${CLR_RESET}" "${CLR_RED}E${CLR_RESET}"
     read -r host
     if [[ "$host" =~ ^[Ee]$ ]]; then
       clear
       return 0
     fi
 
-    # sanitize nickname (no spaces or group delimiter)
+    # sanitize nickname (no spaces or group delimiter)  -- add disallow all special chars?
     host="${host//[[:space:]]/}"
-    if [[ "$host" == *"$GROUP_DELIMITER"* ]]; then
-      last_msg="Nicknames cannot include $GROUP_DELIMITER; use the group option instead."
+    if [[ ! "${host,,}" =~ ^[a-z0-9]+$ ]]; then
+      last_msg="Nicknames must consist of letters and/or numbers."
       continue
     fi
     if [[ -z "$host" ]]; then
@@ -64,22 +64,24 @@ addhost() {
       continue
     fi
 
-    # convert nickname to uppercase
+    # check for existing aliases with this nickname
+    local host_alias=""
+    local group_name=""
     local nickname="${host^^}"
     local -a matching_aliases=()
     mapfile -t matching_aliases < <(_find_aliases_for_nickname "$nickname" "$ssh_config")
-    local host_alias=""
-    local group_name=""
 
-    # deal with editing host (that has MORE than 1 entry already)
+    # deal with editing non-unique nickname
     if [ "${#matching_aliases[@]}" -gt 0 ]; then
+
+      # if 2+ matching aliases, ask which to edit
       if [ "${#matching_aliases[@]}" -gt 1 ]; then
         printf '\nNickname %s exists in multiple host entries:\n' "${CLR_GREEN}${nickname}${CLR_RESET}"
         for idx in "${!matching_aliases[@]}"; do
           printf '  %d) %s\n' $((idx+1)) "${CLR_GREEN}${matching_aliases[idx]}${CLR_RESET}" # find better way to differentiate
         done                                                                                #  - should show details of one and diff the others
                                                                                             #  - create helper in config_utils to do this?
-        # get nickname of host (that has more than 1 entry) to edit
+        # get host entry to edit when 2+ matches
         local alias_choice=""
         while true; do
           printf 'Select entry to edit %s to cancel: ' "(1-${#matching_aliases[@]}) or ${CLR_RED}E${CLR_RESET}"
@@ -103,31 +105,58 @@ addhost() {
         host_alias="${matching_aliases[0]}"
       fi
 
-      # deal with editing host (that has ONLY 1 entry already)
-      printf '\nHost %s already exists.\n' "${CLR_GREEN}$host_alias${CLR_RESET}"  # if part of group, should strip delimiter and make group upcase and orange
-      read -r -p "Edit this host? (Y/n): " edit_choice
-      if [[ "$edit_choice" =~ ^[Nn]$ ]]; then
-        last_msg="Use a different nickname or confirm edit."   # should we even be forcing unique nicknames? I don't think so, just make them into "groups"
-        continue
-      fi
+      # parse group and nickname from existing alias
       if [[ "$host_alias" == *"$GROUP_DELIMITER"* ]]; then
         group_name="${host_alias%%"$GROUP_DELIMITER"*}"
       fi
+
+      # only one other matching alias, ask to edit
+      printf '\nHost %s already exists.\n' "${CLR_ORANGE}${group_name^^} ${CLR_GREEN}$nickname${CLR_RESET}"
+      read -r -p "Edit this host? (Y/n): " edit_choice
+      if [[ "$edit_choice" =~ ^[Nn]$ ]]; then
+        last_msg="Use a different nickname or confirm edit, each entry must be unique."
+        continue
+      fi
+
     else
-      local belongs_group="n"    # add E to cancel option
+      # nickname is unique, ask if part of group
+      local belongs_group="n"
       printf 'Is this host part of a %s? (y/N): ' "${CLR_ORANGE}group${CLR_RESET}"
       read -r belongs_group
+
+      # get group name if part of group
       if [[ "$belongs_group" =~ ^[Yy]$ ]]; then
-        read -r -p "Enter group name (letters/numbers): " group_name
-        group_name="${group_name//[[:space:]]/}"
-        group_name="${group_name,,}"
-        if [[ -z "$group_name" || ! "$group_name" =~ ^[a-z0-9]+$ ]]; then
-          last_msg="Group names must be letters/numbers." # make this prompt for group again?
-          continue
-        fi
+        local group_input=""
+        local group_prompt="Enter a group name, use only letters and/or numbers "
+        group_prompt+="(${CLR_GREEN}Enter${CLR_RESET} to skip, ${CLR_RED}E${CLR_RESET} to cancel): "
+        
+        # prompt for valid group name
+        while true; do
+          printf '%s' "$group_prompt"
+          read -r group_input
+          if [[ "$group_input" =~ ^[Ee]$ ]]; then
+            last_msg="Group selection cancelled. Any changes to host were not saved."
+            continue 2
+          fi
+
+          # sanitize group name
+          group_input="${group_input//[[:space:]]/}"
+          group_input="${group_input,,}"
+
+          if [[ -z "$group_input" ]]; then
+            group_name=""
+            break
+          fi
+          if [[ "${group_input,,}" =~ ^[a-z0-9]+$ ]]; then
+            group_name="${group_input,,}"
+            break
+          fi
+          printf '%s\n' "${CLR_RED}Group names must consist of letters and/or numbers.${CLR_RESET}"
+        done
       else
         group_name=""
       fi
+
       host_alias="$nickname"
       if [[ -n "$group_name" ]]; then
         host_alias="${group_name}${GROUP_DELIMITER}${nickname}"
@@ -147,7 +176,7 @@ addhost() {
       [[ -z "$port" ]] && port="22"
     fi
 
-    # get host values from user
+    # get hostname or IP from user
     printf 'Enter hostname or IP'
     if [ -n "$hostname" ]; then
       printf ' [%s]' "${CLR_GREEN}$hostname${CLR_RESET}"
@@ -155,7 +184,7 @@ addhost() {
     printf ' (or %s to cancel): ' "${CLR_RED}E${CLR_RESET}"
     read -r hostname_input
     if [[ "$hostname_input" =~ ^[Ee]$ ]]; then
-      last_msg="Hostname entry cancelled."
+      last_msg="Hostname entry cancelled. Any changes to host were not saved."
       continue
     fi
     if [[ -n "$hostname_input" ]]; then
@@ -170,7 +199,7 @@ addhost() {
     printf 'Enter port [%s] (or %s to cancel): ' "${CLR_GREEN}${port:-22}${CLR_RESET}" "${CLR_RED}E${CLR_RESET}"
     read -r port_input
     if [[ "$port_input" =~ ^[Ee]$ ]]; then
-      last_msg="Port entry cancelled."
+      last_msg="Port entry cancelled. Any changes to host were not saved."
       continue
     fi
     if [[ -n "$port_input" ]]; then
@@ -180,24 +209,54 @@ addhost() {
       port="22"
     fi
 
-    # get current algorithm settings
-    local -a algo_flags=()
-    [[ -n "$hostkey" ]] && algo_flags+=("H")
-    [[ -n "$kex" ]] && algo_flags+=("K")
-    [[ -n "$macs" ]] && algo_flags+=("M")
-    local algo_current_value="none"
-    if [ "${#algo_flags[@]}" -gt 0 ]; then
-      algo_current_value="${algo_flags[*]}"
-    fi
-
     # get algorithms to configure from user
-    local algo_choice=""                        # make this nicer and allow E to cancel
-    printf 'Configure algorithms (H,K,M e.g. HK) (current: '
-    printf '%s' "${CLR_GREEN}$algo_current_value${CLR_RESET}"
-    printf ')'
-    read -r -p " or Enter to skip: " algo_choice
-    algo_choice="${algo_choice^^}"
-    algo_choice="${algo_choice//[^HKM]/}"
+    local algo_choice=""
+    while true; do
+
+      # build algorithm selection prompt
+      local algo_prompt1="Configure algorithms -- ${CLR_YELLOW}H${CLR_RESET})ostKeyAlgorithms, "
+      algo_prompt1+="${CLR_YELLOW}K${CLR_RESET})exAlgorithms, ${CLR_YELLOW}M${CLR_RESET})ACs"
+      algo_prompt1+=" (e.g. input ${CLR_YELLOW}HKM${CLR_RESET} to configure all)"
+      local algo_prompt2="${CLR_GREEN}Enter${CLR_RESET} to keep current algorithm settings, "
+      algo_prompt2+="${CLR_RED}E${CLR_RESET} to cancel, ${CLR_MAGENTA}?${CLR_RESET} to list current settings: "
+      printf '%s\n%s' "$algo_prompt1" "$algo_prompt2"
+      read -r algo_choice
+
+      # continue 2 so we go back to main while loop
+      if [[ "$algo_choice" =~ ^[Ee]$ ]]; then
+        last_msg="Algorithm configuration cancelled. Any changes to host were not saved."
+        continue 2
+      fi
+
+      # list current settings if requested
+      if [[ "$algo_choice" == "?" ]]; then
+        printf '\nCurrent algorithm settings for host %s:\n' "${CLR_GREEN}$host_alias${CLR_RESET}"
+        _format_algo_display "$hostkey" "HostKeyAlgorithms"
+        _format_algo_display "$kex" "KexAlgorithms"
+        _format_algo_display "$macs" "MACs"
+        printf '\n'
+        read -r -p "Press Enter to continue..."
+        continue
+      fi
+
+      # if enter, keep current settings
+      if [[ -z "$algo_choice" ]]; then
+        algo_choice=""
+        break
+      fi
+
+      # sanitize input
+      algo_choice="${algo_choice^^}"
+      algo_choice="${algo_choice//[^HKM]/}"
+
+
+      # if nothing left, reprompt
+      if [[ -z "$algo_choice" ]]; then
+        printf '%s\n' "${CLR_RED}Enter a combination of H, K, or M.${CLR_RESET}"
+        continue
+      fi
+      break
+    done
 
     # edit host key entry if selected
     if [[ -n "$algo_choice" ]]; then
@@ -237,13 +296,7 @@ addhost() {
       fi
     fi
 
-    # test if this still makes previous changes to host entry even when algo config is cancelled
-    if [[ "$algo_choice" =~ ^[Ee]$ ]]; then
-      last_msg="Algorithm configuration cancelled."
-      continue
-    fi
-
-    # remove existing host entry and append newly edited one
+    # remove existing host entry if any, and append newly edited/created one
     _remove_host_entry "$host_alias" "$ssh_config"
     _append_host_entry "$host_alias" "$hostname" "$port" "$ssh_config" "$hostkey" "$kex" "$macs"
     printf 'Saved host %s (%s:%s) to %s\n' "${CLR_GREEN}$host_alias${CLR_RESET}" "$hostname" "$port" "$ssh_config"

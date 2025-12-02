@@ -1,15 +1,16 @@
 #!/bin/bash
 
 VMS_MENU_LIB="$HOME/.local/lib"
-VMS_MENU=(
+VMS_MENU_FILES=(
   "vmsmenu.sh"
   "addhost.sh"
+  "utils.sh"
 )
 
-for helper in "${VMS_MENU[@]}"; do
-  helper_path="${VMS_MENU_LIB}/${helper}"
-  if [ -r "$helper_path" ]; then
+for lib_file in "${VMS_MENU_FILES[@]}"; do
+  lib_path="${VMS_MENU_LIB}/${lib_file}"
+  if [ -r "$lib_path" ]; then
     # shellcheck disable=SC1090
-    source "$helper_path"
+    source "$lib_path"
   fi
 done
