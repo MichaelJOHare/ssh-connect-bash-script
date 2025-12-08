@@ -1,10 +1,13 @@
 #!/bin/bash
 # interactive SSH/telnet launcher based on ~/.ssh/config and ~/.telnet/config entries
 
+
 # TODO: allow switching transport mode (ssh/telnet) from within the menu
 #       separate out the function of main (favorited) hosts and grouped hosts
 #         - add ability to favorite hosts (e.g., via a separate favorites file?)
-# low prio - clean up use of single vs double quotes in printf statements
+
+# shellcheck disable=SC1091
+source "$HOME/.local/lib/vmsmenu_utils.sh"
 
 if ! declare -F vmsmenu >/dev/null; then
 vmsmenu() {
@@ -13,28 +16,20 @@ vmsmenu() {
 
   # choose transport, ssh (default) or telnet
   local transport_key=""
-  if ! _select_transport transport_key "SELECT CONNECTION METHOD"; then
+  if ! _select_transport transport_key; then
     clear
     return 0
   fi
 
   # prepare config file path and connect function based on transport choice
-  local config_file connect_fn transport_label
-  case "$transport_key" in
-    telnet)
-      transport_label="Telnet"
-      config_file="$HOME/.telnet/config"
-      connect_fn="_telnet_connect"
-      ;;
-    *)
-      transport_label="SSH"
-      config_file="$HOME/.ssh/config"
-      connect_fn="_ssh_connect"
-      ;;
-  esac
+  local config_file=""
+  local transport_label=""
+  local connect_fn="_ssh_connect"
+  if [[ "$transport_key" == "telnet" ]]; then
+    connect_fn="_telnet_connect"
+  fi
 
-  # ensure config file exists, or create if missing
-  if ! _ensure_config_file "$config_file"; then
+  if ! _prepare_transport_config "$transport_key" transport_label config_file; then
     printf 'Unable to access %s config file: %s\n' "$transport_label" "$config_file" >&2
     return 1
   fi
@@ -50,38 +45,12 @@ vmsmenu() {
   local main_hosts=()
   local -A group_hosts_map=()
   local -a group_names=()
+  _split_hosts_by_group hosts main_hosts group_hosts_map group_names
 
-  # initialize group-hosts map
-  local group_entry
-  local host_entry
-  for h in "${hosts[@]}"; do
-    if [[ "$h" == *"$GROUP_DELIMITER"* ]]; then
-      group_entry="${h%%"$GROUP_DELIMITER"*}"
-      host_entry="${h#*"$GROUP_DELIMITER"}"
-      if [[ -n "$group_entry" && -n "$host_entry" && "$group_entry" =~ ^[a-z0-9]+$ ]]; then
-        # first time a group is seen initialize its entry, when same group seen again append host
-        if [[ -z "${group_hosts_map[$group_entry]}" ]]; then
-          group_hosts_map[$group_entry]="$h"
-        else
-          group_hosts_map[$group_entry]+=$'\n'$h
-        fi
-        continue
-      fi
-    fi
-    main_hosts+=("$h")
-  done
 
-  # sort main hosts and group names alphabetically
-  if [ "${#main_hosts[@]}" -gt 0 ]; then
-    mapfile -t main_hosts < <(printf '%s\n' "${main_hosts[@]}" | sort -f)
-  fi
-  if [ "${#group_hosts_map[@]}" -gt 0 ]; then
-    mapfile -t group_names < <(printf '%s\n' "${!group_hosts_map[@]}" | sort)
-  fi
-
-  #
-  #         *** MAIN MENU SECTION ***
-  #
+  #-----------------------------------
+  #     *** MAIN MENU SECTION ***    |
+  #-----------------------------------
 
   # prepare main menu labels, types, and values
   local labels=()
@@ -137,9 +106,10 @@ vmsmenu() {
       continue
     fi
 
-    #
-    #         *** GROUP MENU SECTION ***
-    #
+
+    #------------------------------------
+    #     *** GROUP MENU SECTION ***    |
+    #------------------------------------
 
     # get hosts in selected group
     local -a group_entries=()
