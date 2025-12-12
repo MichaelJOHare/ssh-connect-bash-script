@@ -1,0 +1,279 @@
+{
+  "$help": "https://aka.ms/terminal-documentation",
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+  "actions": [
+    {
+      "command": {
+        "action": "copy",
+        "singleLine": false
+      },
+      "id": "User.copy.644BA8F2"
+    },
+    {
+      "command": "paste",
+      "id": "User.paste"
+    },
+    {
+      "command": {
+        "action": "splitPane",
+        "split": "auto",
+        "splitMode": "duplicate"
+      },
+      "id": "User.splitPane.A6751878"
+    },
+    {
+      "command": "find",
+      "id": "User.find"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOp" },
+      "id": "User.sendInput.Numpad0"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOq" },
+      "id": "User.sendInput.Numpad1"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOr" },
+      "id": "User.sendInput.Numpad2"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOs" },
+      "id": "User.sendInput.Numpad3"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOt" },
+      "id": "User.sendInput.Numpad4"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOu" },
+      "id": "User.sendInput.Numpad5"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOv" },
+      "id": "User.sendInput.Numpad6"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOw" },
+      "id": "User.sendInput.Numpad7"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOx" },
+      "id": "User.sendInput.Numpad8"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOy" },
+      "id": "User.sendInput.Numpad9"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOn" },
+      "id": "User.sendInput.NumpadDecimal"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOM" },
+      "id": "User.sendInput.NumpadEnter"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOP" },
+      "id": "User.sendInput.NumLock"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOQ" },
+      "id": "User.sendInput.Divide"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOR" },
+      "id": "User.sendInput.Multiply"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOS" },
+      "id": "User.sendInput.Subtract"
+    },
+    {
+      "command": { "action": "sendInput", "input": "\u001bOl" },
+      "id": "User.sendInput.Add"
+    }
+  ],
+  "centerOnLaunch": true,
+  "copyFormatting": "none",
+  "copyOnSelect": true,
+  "defaultProfile": "{450bd8f7-224c-4ea1-837f-322cc11631cf}",
+  "initialCols": 132,
+  "keybindings": [
+    {
+      "id": null,
+      "keys": "ctrl+shift+v"
+    },
+    {
+      "id": null,
+      "keys": "ctrl+shift+k"
+    },
+    {
+      "id": null,
+      "keys": "enter"
+    },
+    {
+      "id": "User.find",
+      "keys": "ctrl+shift+f"
+    },
+    {
+      "id": "User.splitPane.A6751878",
+      "keys": "alt+shift+d"
+    },
+    {
+      "id": null,
+      "keys": "shift+insert"
+    },
+    {
+      "id": null,
+      "keys": "ctrl+shift+c"
+    },
+    {
+      "id": "User.sendInput.NumLock",
+      "keys": "ctrl+numpad_divide"
+    },
+    {
+      "id": "User.sendInput.Divide",
+      "keys": "numpad_divide"
+    },
+    {
+      "id": "User.sendInput.Multiply",
+      "keys": "numpad_multiply"
+    },
+    {
+      "id": "User.sendInput.Subtract",
+      "keys": "numpad_subtract"
+    },
+    {
+      "id": "User.sendInput.Add",
+      "keys": "numpad_add"
+    },
+    {
+      "id": "User.sendInput.Numpad0",
+      "keys": "numpad_0"
+    },
+    {
+      "id": "User.sendInput.Numpad1",
+      "keys": "numpad_1"
+    },
+    {
+      "id": "User.sendInput.Numpad2",
+      "keys": "numpad_2"
+    },
+    {
+      "id": "User.sendInput.Numpad3",
+      "keys": "numpad_3"
+    },
+    {
+      "id": "User.sendInput.Numpad4",
+      "keys": "numpad_4"
+    },
+    {
+      "id": "User.sendInput.Numpad5",
+      "keys": "numpad_5"
+    },
+    {
+      "id": "User.sendInput.Numpad6",
+      "keys": "numpad_6"
+    },
+    {
+      "id": "User.sendInput.Numpad7",
+      "keys": "numpad_7"
+    },
+    {
+      "id": "User.sendInput.Numpad8",
+      "keys": "numpad_8"
+    },
+    {
+      "id": "User.sendInput.Numpad9",
+      "keys": "numpad_9"
+    },
+    {
+      "id": "User.sendInput.NumpadDecimal",
+      "keys": "numpad_period"
+    },
+    {
+      "id": "User.sendInput.NumpadEnter",
+      "keys": "ctrl+numpad_add"
+    }
+  ],
+  "newTabMenu": [
+    {
+      "type": "remainingProfiles"
+    }
+  ],
+  "profiles": {
+    "defaults": {
+      "colorScheme": "One Half Dark",
+      "font": {
+        "weight": "normal"
+      },
+      "historySize": 200000
+    },
+    "list": [
+      {
+        "commandline": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+        "hidden": false,
+        "name": "Windows PowerShell"
+      },
+      {
+        "commandline": "%SystemRoot%\\System32\\cmd.exe",
+        "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+        "hidden": true,
+        "name": "Command Prompt"
+      },
+      {
+        "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
+        "hidden": true,
+        "name": "Azure Cloud Shell",
+        "source": "Windows.Terminal.Azure"
+      },
+      {
+        "guid": "{6b09b3c3-3b07-5d96-8260-f62fcf6bd4d6}",
+        "hidden": true,
+        "name": "Developer Command Prompt for VS 2022",
+        "source": "Windows.Terminal.VisualStudio"
+      },
+      {
+        "guid": "{65635556-642e-53b0-be10-643cd61f8608}",
+        "hidden": true,
+        "name": "Developer PowerShell for VS 2022",
+        "source": "Windows.Terminal.VisualStudio"
+      },
+      {
+        "colorScheme": {
+          "light": "One Half Dark"
+        },
+        "commandline": "C:\\Program Files\\Git\\bin\\bash.exe -l",
+        "cursorShape": "filledBox",
+        "font": {
+          "face": "Cascadia Code"
+        },
+        "guid": "{450bd8f7-224c-4ea1-837f-322cc11631cf}",
+        "hidden": false,
+        "historySize": 200000,
+        "icon": "C:\\Program Files\\Git\\mingw64\\share\\git\\git-for-windows.ico",
+        "name": "Git Bash",
+        "startingDirectory": "%USERPROFILE%",
+        "tabTitle": "Git Bash"
+      },
+      {
+        "colorScheme": "One Half Dark",
+        "commandline": "C:\\Program Files\\Git\\bin\\bash.exe -ic \"vmsmenu\"",
+        "cursorShape": "filledBox",
+        "font": {
+          "face": "Cascadia Code"
+        },
+        "guid": "{69e78f2b-2416-4c8d-bd47-ca33acbbfc29}",
+        "hidden": false,
+        "icon": "C:\\Users\\Michael Ohare\\OneDrive - Teracloud\\Pictures\\VMS 3 Bars.png",
+        "name": "VMS MENU",
+        "startingDirectory": "%USERPROFILE%",
+        "tabTitle": "VMS MENU"
+      }
+    ]
+  },
+  "schemes": [],
+  "themes": []
+}

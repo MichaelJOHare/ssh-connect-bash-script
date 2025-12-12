@@ -16,8 +16,19 @@ _append_host_entry() {
   local hostkey="$5"
   local kex="$6"
   local macs="$7"
+  local prefix=""
+
+  # only add leading newline if there isn't one already
+  if [[ -s "$config_file" ]]; then
+    local last_line
+    last_line="$(tail -n 1 "$config_file")"
+    if [[ -n "$last_line" ]]; then
+      prefix=$'\n'
+    fi
+  fi
+
   {
-    printf '\nHost %s\n' "$alias"
+    printf '%sHost %s\n' "$prefix" "$alias"
     printf '    Hostname %s\n' "$hostname"
     printf '    Port %s\n' "$port"
     if [[ -n "$hostkey" ]]; then
@@ -102,7 +113,7 @@ _normalize_identifier() {
   return 0
 }
 
-# formats current algorithm settings for ssh host entry
+# formats current algorithm settings for ssh host entry to display
 _format_algo_display() {
   local value="$1"
   local label="$2"

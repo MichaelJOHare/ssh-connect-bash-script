@@ -1,10 +1,53 @@
 #!/bin/bash
 # prompt functions for addhost.sh
 
+_add_or_list_menu() {
+  local config_file="$1"
+  local selection=""
+
+  while true; do
+    clear
+    printf '\n%s\n\n' "-----------------ADD OR LIST HOSTS--------------------"
+    printf '1) %s or edit %s\n' "${CLR_MAGENTA}Add${CLR_RESET}" "${CLR_GREEN}hosts${CLR_RESET}"
+    printf '2) %s existing %s\n' "${CLR_MAGENTA}List${CLR_RESET}" "${CLR_GREEN}hosts${CLR_RESET}"
+    printf '\n%s' "Enter selection (or ${CLR_RED}E${CLR_RESET} to exit) [${CLR_GREEN}1${CLR_RESET}]: "
+    read -r selection
+    case "$selection" in
+      ''|1)
+        break
+        ;;
+      2)
+        mapfile -t hosts < <(_load_host_aliases "$config_file" | sort -f)
+        if [ ${#hosts[@]} -eq 0 ]; then
+          printf 'No hosts found in %s\n' "$config_file" >&2
+          return 1
+        fi
+        printf 'Listing existing hosts in %s:\n\n' "${CLR_MAGENTA}$config_file${CLR_RESET}"
+        for idx in "${!hosts[@]}"; do
+          local host_display
+          host_display="$(_format_host_display "${hosts[idx]}")"
+          printf '%d) %s\n' $((idx+1)) "$host_display"
+        done
+
+        printf '\nPress Enter to return to menu...' # change this to allow selecting a host to edit/remove/view details
+        read -r _
+        ;;
+      [Ee])
+        clear
+        return 0
+        ;;
+      *)
+        _clear_prev_input
+        printf '%s\n' "${CLR_RED}Invalid selection.${CLR_RESET}"
+        sleep 1
+        ;;
+    esac
+  done
+}
 
 # prompts for a unique host alias (nickname with optional group)
 _prompt_nickname() {
-  local ssh_config="$1"
+  local config_file1="$1"
   local -n _alias_ref="$2"
   local -n _last_msg_ref="$3"
 
@@ -28,7 +71,7 @@ _prompt_nickname() {
   fi
 
   local -a matching_aliases=()
-  mapfile -t matching_aliases < <(_find_aliases_for_nickname "$nickname" "$ssh_config")
+  mapfile -t matching_aliases < <(_find_aliases_for_nickname "$nickname" "$config_file1")
 
   # if matches found, prompt to select which to edit
   if [ "${#matching_aliases[@]}" -gt 0 ]; then
@@ -266,7 +309,7 @@ _select_existing_alias() {
   local edit_choice=""
   read -r -p "Edit this host? (Y/n): " edit_choice
   if [[ "$edit_choice" =~ ^[Nn]$ ]]; then
-    _last_msg_ref5="Use a different nickname or confirm edit, each entry must be unique."
+    _last_msg_ref5="Use a different nickname or confirm edit, each entry must have a unique nickname."
     return 1
   fi
 
@@ -277,7 +320,7 @@ _select_existing_alias() {
 # prompt to change alias (nickname and/or group) when editing existing host
 _prompt_alias_edit() {
   local current_alias="$1"
-  local ssh_config="$2"
+  local config_file2="$2"
   local -n _alias_ref2="$3"
   local -n _last_msg_ref6="$4"
   local current_group=""
@@ -303,9 +346,12 @@ _prompt_alias_edit() {
 
   local new_nickname="$current_nickname"
   while true; do
-    printf 'Enter new nickname [%s] (Enter keeps current, %s to cancel): ' "${CLR_GREEN}${current_nickname}${CLR_RESET}" "${CLR_RED}E${CLR_RESET}"
+    local nickname_prompt="Enter new nickname [${CLR_GREEN}${current_nickname}${CLR_RESET}] "
+    nickname_prompt+="(${CLR_GREEN}Enter${CLR_RESET} keeps current, ${CLR_RED}E${CLR_RESET} to cancel): "
+    printf '%s' "$nickname_prompt"
     local nickname_input=""
     read -r nickname_input
+
     if [[ "$nickname_input" =~ ^[Ee]$ ]]; then
       _last_msg_ref6="Nickname edit cancelled. Any changes to host were not saved."
       return 1
@@ -313,6 +359,7 @@ _prompt_alias_edit() {
     if [[ -z "$nickname_input" ]]; then
       break
     fi
+
     local normalized=""
     normalized="$(_normalize_identifier "$nickname_input" upper)"
     local status=$?
@@ -333,9 +380,13 @@ _prompt_alias_edit() {
     if [[ -n "$current_group" ]]; then
       group_label="${current_group^^}"
     fi
-    printf 'Enter new group name [%s] (Enter keeps current, - removes, %s to cancel): ' "${CLR_ORANGE}${group_label}${CLR_RESET}" "${CLR_RED}E${CLR_RESET}"
+
+    local group_prompt="Enter new group name [${CLR_ORANGE}${group_label}${CLR_RESET}] (${CLR_GREEN}Enter${CLR_RESET} keeps current,"
+    group_prompt+=" ${CLR_MAGENTA}-${CLR_RESET} removes, ${CLR_RED}E${CLR_RESET} to cancel): "
+    printf '%s' "$group_prompt"
     local group_input=""
     read -r group_input
+
     if [[ "$group_input" =~ ^[Ee]$ ]]; then
       _last_msg_ref6="Group edit cancelled. Any changes to host were not saved."
       return 1
@@ -347,6 +398,7 @@ _prompt_alias_edit() {
     if [[ -z "$group_input" ]]; then
       break
     fi
+
     local normalized_group=""
     normalized_group="$(_normalize_identifier "$group_input" lower)"
     local group_status=$?
@@ -362,7 +414,7 @@ _prompt_alias_edit() {
     new_alias="${new_group}${GROUP_DELIMITER}${new_nickname}"
   fi
 
-  if [[ "$new_alias" != "$current_alias" ]] && _host_entry_exists "$new_alias" "$ssh_config"; then
+  if [[ "$new_alias" != "$current_alias" ]] && _host_entry_exists "$new_alias" "$config_file2"; then
     _last_msg_ref6="Nickname ${new_alias} already exists. Choose a different nickname or group."
     return 1
   fi

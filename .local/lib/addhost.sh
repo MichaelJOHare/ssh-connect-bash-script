@@ -30,45 +30,7 @@ addhost() {
   fi
 
   # initial menu to add or list hosts
-  local selection=""
-  while true; do
-    clear
-    printf '\n%s\n\n' "-----------------ADD OR LIST HOSTS--------------------"
-    printf '1) %s or edit %s\n' "${CLR_MAGENTA}Add${CLR_RESET}" "${CLR_GREEN}hosts${CLR_RESET}"
-    printf '2) %s existing %s\n' "${CLR_MAGENTA}List${CLR_RESET}" "${CLR_GREEN}hosts${CLR_RESET}"
-    printf '\n%s' "Enter selection (or ${CLR_RED}E${CLR_RESET} to exit) [${CLR_GREEN}1${CLR_RESET}]: "
-    read -r selection
-    case "$selection" in
-      ''|1)
-        break
-        ;;
-      2)
-        mapfile -t hosts < <(_load_host_aliases "$config_file" | sort -f)
-        if [ ${#hosts[@]} -eq 0 ]; then
-          printf 'No hosts found in %s\n' "$config_file" >&2
-          return 1
-        fi
-        printf 'Listing existing hosts in %s:\n\n' "${CLR_MAGENTA}$config_file${CLR_RESET}"
-        for idx in "${!hosts[@]}"; do
-          local host_display
-          host_display="$(_format_host_display "${hosts[idx]}")"
-          printf '%d) %s\n' $((idx+1)) "$host_display"
-        done
-
-        printf '\nPress Enter to return to menu...'
-        read -r _
-        ;;
-      [Ee])
-        clear
-        return 0
-        ;;
-      *)
-        _clear_prev_input
-        printf '%s\n' "${CLR_RED}Invalid selection.${CLR_RESET}"
-        sleep 1
-        ;;
-    esac
-  done
+  _add_or_list_menu "$config_file"
 
   # main addhost loop
   while true; do
@@ -119,7 +81,7 @@ addhost() {
     local kex=""
     local macs=""
 
-    # if editing existing host, read current values
+    # if editing existing host, read current values and prompt to edit nickname and/or group
     if (( editing_existing )); then
       IFS='|' read -r hostname port hostkey kex macs <<< "$( _read_host_values "$original_alias" "$config_file" )"
       if ! _prompt_alias_edit "$original_alias" "$config_file" host_alias last_msg; then

@@ -4,7 +4,7 @@ VMS_MENU_LIB="$HOME/.local/lib"
 VMS_MENU_FILES=(
   "vmsmenu.sh"
   "addhost.sh"
-  "utils.sh"
+  "shared_utils.sh"
 )
 
 for lib_file in "${VMS_MENU_FILES[@]}"; do
